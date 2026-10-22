@@ -26,7 +26,6 @@ public class Usuario {
 		return rol;
 	}
 
-	// no hay getContrasena(): la contraseña no sale de la clase, solo se comprueba aquí
 	public boolean comprobarContrasena(String contrasena) {
 		return this.contrasena.equals(contrasena);
 	}

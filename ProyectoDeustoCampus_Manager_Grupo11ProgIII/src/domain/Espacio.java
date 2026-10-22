@@ -24,7 +24,6 @@ public abstract class Espacio{
 		return aforo;
 	}
 
-	// true si la reserva la tiene que aprobar un administrador
 	public abstract boolean requiereAprobacion();
 
 	@Override
