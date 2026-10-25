@@ -17,6 +17,7 @@ import db.GestorDatos;
 import domain.Espacio;
 import domain.Usuario;
 
+
 public class VentanaBuscarReserva extends JFrame {
 	
 	private static final long serialVersionUID = 1L;
