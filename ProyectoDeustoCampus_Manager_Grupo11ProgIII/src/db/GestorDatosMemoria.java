@@ -9,6 +9,7 @@ import domain.Espacio;
 import domain.EstadoReserva;
 import domain.Laboratorio;
 import domain.Reserva;
+import domain.ReservaException;
 import domain.Rol;
 import domain.Usuario;
 
@@ -62,6 +63,52 @@ public class GestorDatosMemoria implements GestorDatos {
 			}
 		}
 		return libres;
+	}
+
+	@Override
+	public Reserva crearReserva(Usuario usuario, Espacio espacio, LocalDate fecha, String hora)
+			throws ReservaException {
+		if (!estaLibre(espacio, fecha, hora)) {
+			throw new ReservaException("El espacio " + espacio.getCodigo() + " ya está reservado a esa hora.");
+		}
+		// polimorfismo: cada tipo de espacio decide si la reserva necesita aprobación
+		EstadoReserva estado = espacio.requiereAprobacion() ? EstadoReserva.PENDIENTE : EstadoReserva.CONFIRMADA;
+		Reserva reserva = new Reserva(usuario, espacio, fecha, hora, estado);
+		reservas.add(reserva);
+		return reserva;
+	}
+
+	@Override
+	public List<Reserva> getReservas(Usuario usuario) {
+		List<Reserva> resultado = new ArrayList<>();
+		for (Reserva r : reservas) {
+			if (r.getUsuario().equals(usuario)) {
+				resultado.add(r);
+			}
+		}
+		return resultado;
+	}
+
+	@Override
+	public List<Reserva> getReservasPendientes() {
+		List<Reserva> resultado = new ArrayList<>();
+		for (Reserva r : reservas) {
+			if (r.getEstado() == EstadoReserva.PENDIENTE) {
+				resultado.add(r);
+			}
+		}
+		return resultado;
+	}
+
+	@Override
+	public void cambiarEstado(Reserva reserva, EstadoReserva nuevoEstado) throws ReservaException {
+		if (!reserva.estaActiva()) {
+			throw new ReservaException("Esta reserva ya está cancelada o rechazada.");
+		}
+		if (reserva.getFecha().isBefore(LocalDate.now())) {
+			throw new ReservaException("No se puede cambiar una reserva de un día que ya ha pasado.");
+		}
+		reserva.setEstado(nuevoEstado);
 	}
 
 	// si no hay ninguna reserva en ese espacio en un dia y fecha, el espacio esta libre
