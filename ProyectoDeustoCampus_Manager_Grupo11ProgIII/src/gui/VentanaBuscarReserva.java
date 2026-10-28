@@ -8,6 +8,7 @@ import java.util.List;
 import javax.swing.JComboBox;
 import javax.swing.JFrame;
 import javax.swing.JLabel;
+import javax.swing.JOptionPane;
 import javax.swing.JPanel;
 import javax.swing.JScrollPane;
 import javax.swing.JTable;
@@ -15,6 +16,9 @@ import javax.swing.table.DefaultTableModel;
 
 import db.GestorDatos;
 import domain.Espacio;
+import domain.EstadoReserva;
+import domain.Reserva;
+import domain.ReservaException;
 import domain.Usuario;
 
 
@@ -24,6 +28,7 @@ public class VentanaBuscarReserva extends JFrame {
 	private static final String[] HORAS = { "08:00", "10:00", "12:00", "15:00", "17:00", "19:00" };
 
 	private GestorDatos gestor;
+	private Usuario usuario;
 	private List<LocalDate> fechas = new ArrayList<>();
 	private List<Espacio> espacios = new ArrayList<>(); // los espacios que se ven en la tabla
 	private JComboBox<String> comboFecha = new JComboBox<>();
@@ -73,6 +78,22 @@ public class VentanaBuscarReserva extends JFrame {
 		for (Espacio e : espacios) {
 			String aprobacion = e.requiereAprobacion() ? "Sí" : "No";
 			modelo.addRow(new Object[] { e.getCodigo(), e.getNombre(), e.getAforo(), aprobacion });
+		}
+	}
+	
+	private void reservar() {
+		Espacio espacio = espacios.get(tabla.getSelectedRow());
+		LocalDate fecha = fechas.get(comboFecha.getSelectedIndex());
+		try {
+			Reserva reserva = gestor.crearReserva(usuario, espacio, fecha, (String) comboHora.getSelectedItem());
+			if (reserva.getEstado() == EstadoReserva.CONFIRMADA) {
+				JOptionPane.showMessageDialog(this, "Reserva confirmada: " + espacio);
+			} else {
+				JOptionPane.showMessageDialog(this, "Solicitud enviada. Un administrador tiene que aprobarla.");
+			}
+			buscar();
+		} catch (ReservaException ex) {
+			JOptionPane.showMessageDialog(this, ex.getMessage(), "No se puede reservar", JOptionPane.ERROR_MESSAGE);
 		}
 	}
 
