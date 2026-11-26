@@ -15,6 +15,7 @@ import javax.swing.JScrollPane;
 import javax.swing.JTable;
 import javax.swing.table.DefaultTableModel;
 
+import db.BDException;
 import db.GestorDatos;
 import domain.Espacio;
 import domain.EstadoReserva;
@@ -93,7 +94,12 @@ public class VentanaBuscarReserva extends JFrame {
 	// carga en la tabla los espacios libres en la fecha y hora elegidas
 	private void buscar() {
 		LocalDate fecha = fechas.get(comboFecha.getSelectedIndex());
-		espacios = gestor.buscarEspaciosLibres(fecha, (String) comboHora.getSelectedItem());
+		try {
+			espacios = gestor.buscarEspaciosLibres(fecha, (String) comboHora.getSelectedItem());
+		} catch (BDException ex) {
+			JOptionPane.showMessageDialog(this, ex.getMessage(), "Base de datos", JOptionPane.ERROR_MESSAGE);
+			espacios = new ArrayList<>();
+		}
 		modelo.setRowCount(0);
 		for (Espacio e : espacios) {
 			String aprobacion = e.requiereAprobacion() ? "Sí" : "No";
@@ -114,6 +120,8 @@ public class VentanaBuscarReserva extends JFrame {
 			buscar();
 		}catch (ReservaException ex) {
 			JOptionPane.showMessageDialog(this, ex.getMessage(), "No se puede reservar", JOptionPane.ERROR_MESSAGE);
+		} catch (BDException ex) {
+			JOptionPane.showMessageDialog(this, ex.getMessage(), "Base de datos", JOptionPane.ERROR_MESSAGE);
 		}
 	}
 

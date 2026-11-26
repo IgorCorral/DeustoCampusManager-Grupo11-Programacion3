@@ -10,6 +10,7 @@ import javax.swing.JOptionPane;
 import javax.swing.JPanel;
 import javax.swing.JPasswordField;
 import javax.swing.JTextField;
+import db.BDException;
 import db.GestorDatos;
 import domain.Rol;
 import domain.Usuario;
@@ -49,7 +50,13 @@ public class VentanaLogin extends JFrame {
 	private void iniciarSesion() {
 		String email = txtEmail.getText().trim();
 		String contrasena = new String(txtContrasena.getPassword());
-		Usuario usuario = gestor.login(email, contrasena);
+		Usuario usuario;
+		try {
+			usuario = gestor.login(email, contrasena);
+		} catch (BDException ex) {
+			JOptionPane.showMessageDialog(this, ex.getMessage(), "Base de datos", JOptionPane.ERROR_MESSAGE);
+			return;
+		}
 
 		if (usuario == null) {
 			JOptionPane.showMessageDialog(this, "Email o contraseña incorrectos.", "Error", JOptionPane.ERROR_MESSAGE);

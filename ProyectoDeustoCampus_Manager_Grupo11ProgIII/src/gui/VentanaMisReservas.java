@@ -2,6 +2,8 @@ package gui;
 
 import java.awt.BorderLayout;
 import java.awt.Color;
+import java.util.ArrayList;
+import java.util.List;
 
 import javax.swing.JButton;
 import javax.swing.JDialog;
@@ -12,6 +14,7 @@ import javax.swing.JPanel;
 import javax.swing.JScrollPane;
 import javax.swing.JTable;
 
+import db.BDException;
 import db.GestorDatos;
 import domain.EstadoReserva;
 import domain.Reserva;
@@ -29,7 +32,13 @@ public class VentanaMisReservas extends JDialog {
 	public VentanaMisReservas(JFrame padre, GestorDatos gestor, Usuario usuario) {
 		super(padre, "Mis reservas", true); // modal: hasta cerrarlo no se puede usar la ventana de atrás
 		this.gestor = gestor;
-		modelo = new ReservaTableModel(gestor.getReservas(usuario));
+		List<Reserva> reservas = new ArrayList<>();
+		try {
+			reservas = gestor.getReservas(usuario);
+		} catch (BDException ex) {
+			JOptionPane.showMessageDialog(padre, ex.getMessage(), "Base de datos", JOptionPane.ERROR_MESSAGE);
+		}
+		modelo = new ReservaTableModel(reservas);
 		tabla = new JTable(modelo);
 
 		// renderer con una expresión lambda: el texto del estado se pinta de un color según su valor
@@ -77,6 +86,8 @@ public class VentanaMisReservas extends JDialog {
 				modelo.fireTableDataChanged(); // la reserva ya está cancelada: solo hay que repintar la tabla
 			} catch (ReservaException ex) {
 				JOptionPane.showMessageDialog(this, ex.getMessage(), "No se puede cancelar", JOptionPane.ERROR_MESSAGE);
+			} catch (BDException ex) {
+				JOptionPane.showMessageDialog(this, ex.getMessage(), "Base de datos", JOptionPane.ERROR_MESSAGE);
 			}
 		}
 	}

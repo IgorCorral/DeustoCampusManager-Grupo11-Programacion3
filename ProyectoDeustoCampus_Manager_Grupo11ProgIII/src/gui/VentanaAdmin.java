@@ -1,6 +1,7 @@
 package gui;
 
 import java.awt.BorderLayout;
+import java.util.ArrayList;
 
 import javax.swing.JButton;
 import javax.swing.JFrame;
@@ -9,6 +10,7 @@ import javax.swing.JPanel;
 import javax.swing.JScrollPane;
 import javax.swing.JTable;
 
+import db.BDException;
 import db.GestorDatos;
 import domain.EstadoReserva;
 import domain.Reserva;
@@ -25,8 +27,9 @@ public class VentanaAdmin extends JFrame {
 
 	public VentanaAdmin(GestorDatos gestor) {
 		this.gestor = gestor;
-		modelo = new ReservaTableModel(gestor.getReservasPendientes());
+		modelo = new ReservaTableModel(new ArrayList<>());
 		tabla = new JTable(modelo);
+		cargarPendientes();
 
 		JButton btnAprobar = new JButton("Aprobar");
 		btnAprobar.addActionListener(e -> cambiarEstado(EstadoReserva.CONFIRMADA));
@@ -54,9 +57,20 @@ public class VentanaAdmin extends JFrame {
 		Reserva reserva = modelo.getReserva(fila);
 		try {
 			gestor.cambiarEstado(reserva, nuevoEstado);
-			modelo.setReservas(gestor.getReservasPendientes());
 		} catch (ReservaException ex) {
 			JOptionPane.showMessageDialog(this, ex.getMessage(), "Error", JOptionPane.ERROR_MESSAGE);
+		} catch (BDException ex) {
+			JOptionPane.showMessageDialog(this, ex.getMessage(), "Base de datos", JOptionPane.ERROR_MESSAGE);
+		}
+		cargarPendientes();
+	}
+
+	// recarga la tabla con las solicitudes pendientes que hay en la base de datos
+	private void cargarPendientes() {
+		try {
+			modelo.setReservas(gestor.getReservasPendientes());
+		} catch (BDException ex) {
+			JOptionPane.showMessageDialog(this, ex.getMessage(), "Base de datos", JOptionPane.ERROR_MESSAGE);
 		}
 	}
 }
