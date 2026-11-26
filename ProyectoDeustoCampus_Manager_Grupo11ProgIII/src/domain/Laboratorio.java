@@ -10,5 +10,9 @@ public class Laboratorio extends Espacio {
 	public boolean requiereAprobacion() {
 		return true;
 	}
+	 @Override    
+	 public String getTipo() {        
+		 return "Laboratorio";    
+		 }
 
 }
