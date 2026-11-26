@@ -10,8 +10,10 @@ public class Aula extends Espacio {
 	public boolean requiereAprobacion() {
 		return false;
 	}
-	@Override 
-	public String getTipo() { 
+
+	@Override
+	public String getTipo() {
 		return "Aula";
 	}
+
 }
