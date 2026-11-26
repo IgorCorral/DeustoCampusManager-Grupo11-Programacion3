@@ -6,9 +6,16 @@ import java.sql.DriverManager;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.time.LocalDate;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Properties;
 import java.util.logging.Logger;
 
+import domain.Espacio;
+import domain.EstadoReserva;
+import domain.Reserva;
+import domain.ReservaException;
 import domain.Rol;
 import domain.Usuario;
 
@@ -138,4 +145,110 @@ public class GestorBD {
 			throw new BDException("No se ha podido guardar el usuario", ex);
 		}
 	}
+	
+	// Devuelve todos los espacios ordenados por código
+		public List<Espacio> getEspacios() throws BDException {
+			List<Espacio> espacios = new ArrayList<>();
+			String sql = "SELECT * FROM Espacio ORDER BY codigo";
+			try (Connection con = DriverManager.getConnection(connectionString);
+					PreparedStatement pStmt = con.prepareStatement(sql)) {
+				ResultSet rs = pStmt.executeQuery();
+				//Se recorre el ResultSet y se crea un objeto por cada fila
+				while (rs.next()) {
+					espacios.add(Espacio.crear(rs.getString("tipo"), rs.getString("codigo"), rs.getString("nombre"),
+							rs.getInt("aforo")));
+				}
+				rs.close();
+			} catch (SQLException ex) {
+				logger.warning(String.format("Error al recuperar los espacios: %s", ex.getMessage()));
+				throw new BDException("No se han podido consultar los espacios", ex);
+			}
+			return espacios;
+		}
+
+		// Devuelve el espacio con ese código o null si no existe
+		public Espacio getEspacio(String codigo) throws BDException {
+			Espacio espacio = null;
+			String sql = "SELECT * FROM Espacio WHERE codigo = ? LIMIT 1";
+			try (Connection con = DriverManager.getConnection(connectionString);
+					PreparedStatement pStmt = con.prepareStatement(sql)) {
+				pStmt.setString(1, codigo);
+				ResultSet rs = pStmt.executeQuery();
+				if (rs.next()) {
+					espacio = Espacio.crear(rs.getString("tipo"), rs.getString("codigo"), rs.getString("nombre"),
+							rs.getInt("aforo"));
+				}
+				rs.close();
+			} catch (SQLException ex) {
+				logger.warning(String.format("Error al buscar el espacio %s: %s", codigo, ex.getMessage()));
+				throw new BDException("No se ha podido consultar el espacio", ex);
+			}
+			return espacio;
+		}
+
+		// Devuelve los espacios que no tienen ninguna reserva activa (pendiente o confirmada) en esa fecha y hora
+		// Las fechas se guardan como texto con el formato de LocalDate.toString()
+		public List<Espacio> buscarEspaciosLibres(LocalDate fecha, String hora) throws BDException {
+			//Primero se buscan los códigos de los espacios ocupados a esa hora
+			List<String> ocupados = new ArrayList<>();
+			String sql = "SELECT codigo_espacio FROM Reserva WHERE fecha = ? AND hora = ? AND (estado = ? OR estado = ?)";
+			try (Connection con = DriverManager.getConnection(connectionString);
+					PreparedStatement pStmt = con.prepareStatement(sql)) {
+				pStmt.setString(1, fecha.toString());
+				pStmt.setString(2, hora);
+				pStmt.setString(3, EstadoReserva.PENDIENTE.toString());
+				pStmt.setString(4, EstadoReserva.CONFIRMADA.toString());
+				ResultSet rs = pStmt.executeQuery();
+				while (rs.next()) {
+					ocupados.add(rs.getString("codigo_espacio"));
+				}
+				rs.close();
+			} catch (SQLException ex) {
+				logger.warning(String.format("Error al buscar los espacios libres: %s", ex.getMessage()));
+				throw new BDException("No se han podido buscar los espacios libres", ex);
+			}
+			//Después se quedan todos los espacios que no están en esa lista
+			List<Espacio> libres = new ArrayList<>();
+			for (Espacio e : getEspacios()) {
+				if (!ocupados.contains(e.getCodigo())) {
+					libres.add(e);
+				}
+			}
+			return libres;
+		}
+
+		// Crea la reserva si el espacio sigue libre (si no, lanza ReservaException) y la guarda
+		public Reserva crearReserva(Usuario usuario, Espacio espacio, LocalDate fecha, String hora)
+				throws ReservaException, BDException {
+			//contains usa el equals de Espacio, que compara los códigos
+			if (!buscarEspaciosLibres(fecha, hora).contains(espacio)) {
+				throw new ReservaException("El espacio " + espacio.getCodigo() + " ya está reservado a esa hora.");
+			}
+			// polimorfismo: cada tipo de espacio decide si la reserva necesita aprobación
+			EstadoReserva estado = espacio.requiereAprobacion() ? EstadoReserva.PENDIENTE : EstadoReserva.CONFIRMADA;
+			Reserva reserva = new Reserva(usuario, espacio, fecha, hora, estado);
+			insertarReserva(reserva);
+			return reserva;
+		}
+
+		// Inserta una reserva en la tabla Reserva. El id lo pone SQLite solo
+		private void insertarReserva(Reserva reserva) throws BDException {
+			String sql = "INSERT INTO Reserva (email_usuario, codigo_espacio, fecha, hora, estado) VALUES (?, ?, ?, ?, ?)";
+			try (Connection con = DriverManager.getConnection(connectionString);
+					PreparedStatement pStmt = con.prepareStatement(sql)) {
+				pStmt.setString(1, reserva.getUsuario().getEmail());
+				pStmt.setString(2, reserva.getEspacio().getCodigo());
+				pStmt.setString(3, reserva.getFecha().toString());
+				pStmt.setString(4, reserva.getHora());
+				pStmt.setString(5, reserva.getEstado().toString());
+				if (pStmt.executeUpdate() != 1) {
+					logger.warning(String.format("No se ha insertado la reserva de %s", reserva.getEspacio()));
+				} else {
+					logger.info(String.format("Se ha insertado la reserva de %s", reserva.getEspacio()));
+				}
+			} catch (SQLException ex) {
+				logger.warning(String.format("Error al insertar la reserva: %s", ex.getMessage()));
+				throw new BDException("No se ha podido guardar la reserva", ex);
+			}
+		}
 }
