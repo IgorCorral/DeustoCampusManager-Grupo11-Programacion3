@@ -23,7 +23,7 @@ import domain.Usuario;
 // Cada método abre su conexión con try-with-resources (se cierra sola aunque haya un error)
 // y usa PreparedStatement para pasar los datos a la sentencia SQL sin peligro de inyección SQL.
 // Si algo falla se guarda un aviso en el log y se lanza una BDException para que la ventana avise.
-public class GestorBD {
+public class GestorBD implements GestorDatos {
 
 	private final String PROPERTIES_FILE = "conf/app.properties";
 	private final String EMAIL_ADMIN = "admin@deusto.es";
@@ -118,6 +118,7 @@ public class GestorBD {
 	}
 
 	// Devuelve el usuario si el email y la contraseña son correctos, si no devuelve null
+	@Override
 	public Usuario login(String email, String contrasena) throws BDException {
 		Usuario usuario = getUsuario(email);
 		if (usuario != null && usuario.comprobarContrasena(contrasena)) {
@@ -188,6 +189,7 @@ public class GestorBD {
 
 	// Devuelve los espacios que no tienen ninguna reserva activa (pendiente o confirmada) en esa fecha y hora.
 	// Las fechas se guardan como texto con el formato de LocalDate.toString(), por ejemplo 2026-11-30
+	@Override
 	public List<Espacio> buscarEspaciosLibres(LocalDate fecha, String hora) throws BDException {
 		//Primero se buscan los códigos de los espacios ocupados a esa hora
 		List<String> ocupados = new ArrayList<>();
@@ -219,6 +221,7 @@ public class GestorBD {
 	}
 
 	// Crea la reserva si el espacio sigue libre (si no, lanza ReservaException) y la guarda
+	@Override
 	public Reserva crearReserva(Usuario usuario, Espacio espacio, LocalDate fecha, String hora)
 			throws ReservaException, BDException {
 		//contains usa el equals de Espacio, que compara los códigos
@@ -254,11 +257,13 @@ public class GestorBD {
 	}
 
 	// Reservas de un usuario, ordenadas por fecha y hora
+	@Override
 	public List<Reserva> getReservas(Usuario usuario) throws BDException {
 		return leerReservas("SELECT * FROM Reserva WHERE email_usuario = ? ORDER BY fecha, hora", usuario.getEmail());
 	}
 
 	// Solicitudes que tiene que aprobar o rechazar el administrador
+	@Override
 	public List<Reserva> getReservasPendientes() throws BDException {
 		return leerReservas("SELECT * FROM Reserva WHERE estado = ? ORDER BY fecha, hora",
 				EstadoReserva.PENDIENTE.toString());
@@ -289,6 +294,7 @@ public class GestorBD {
 	}
 
 	// Cancela, aprueba o rechaza una reserva que sigue activa y que no es de un día que ya ha pasado
+	@Override
 	public void cambiarEstado(Reserva reserva, EstadoReserva nuevoEstado) throws ReservaException, BDException {
 		if (!reserva.estaActiva()) {
 			throw new ReservaException("Esta reserva ya está cancelada o rechazada.");
