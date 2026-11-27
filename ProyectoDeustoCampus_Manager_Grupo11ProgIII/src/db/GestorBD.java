@@ -252,4 +252,67 @@ public class GestorBD {
 			throw new BDException("No se ha podido guardar la reserva", ex);
 		}
 	}
+
+	// Reservas de un usuario, ordenadas por fecha y hora
+	public List<Reserva> getReservas(Usuario usuario) throws BDException {
+		return leerReservas("SELECT * FROM Reserva WHERE email_usuario = ? ORDER BY fecha, hora", usuario.getEmail());
+	}
+
+	// Solicitudes que tiene que aprobar o rechazar el administrador
+	public List<Reserva> getReservasPendientes() throws BDException {
+		return leerReservas("SELECT * FROM Reserva WHERE estado = ? ORDER BY fecha, hora",
+				EstadoReserva.PENDIENTE.toString());
+	}
+
+	// Ejecuta una consulta de reservas que tiene un solo parámetro y crea un objeto Reserva por fila.
+	// Igual que en las prácticas no se usa JOIN: el usuario y el espacio se buscan con getUsuario y getEspacio
+	private List<Reserva> leerReservas(String sql, String parametro) throws BDException {
+		List<Reserva> reservas = new ArrayList<>();
+		try (Connection con = DriverManager.getConnection(connectionString);
+				PreparedStatement pStmt = con.prepareStatement(sql)) {
+			pStmt.setString(1, parametro);
+			ResultSet rs = pStmt.executeQuery();
+			while (rs.next()) {
+				Usuario usuario = getUsuario(rs.getString("email_usuario"));
+				Espacio espacio = getEspacio(rs.getString("codigo_espacio"));
+				Reserva reserva = new Reserva(usuario, espacio, LocalDate.parse(rs.getString("fecha")),
+						rs.getString("hora"), EstadoReserva.valueOf(rs.getString("estado")));
+				reserva.setId(rs.getInt("id"));
+				reservas.add(reserva);
+			}
+			rs.close();
+		} catch (SQLException ex) {
+			logger.warning(String.format("Error al recuperar las reservas: %s", ex.getMessage()));
+			throw new BDException("No se han podido consultar las reservas", ex);
+		}
+		return reservas;
+	}
+
+	// Cancela, aprueba o rechaza una reserva que sigue activa y que no es de un día que ya ha pasado
+	public void cambiarEstado(Reserva reserva, EstadoReserva nuevoEstado) throws ReservaException, BDException {
+		if (!reserva.estaActiva()) {
+			throw new ReservaException("Esta reserva ya está cancelada o rechazada.");
+		}
+		if (reserva.getFecha().isBefore(LocalDate.now())) {
+			throw new ReservaException("No se puede cambiar una reserva de un día que ya ha pasado.");
+		}
+		//En el WHERE también se mira el estado por si otra persona la ha cambiado mientras tanto
+		String sql = "UPDATE Reserva SET estado = ? WHERE id = ? AND (estado = ? OR estado = ?)";
+		try (Connection con = DriverManager.getConnection(connectionString);
+				PreparedStatement pStmt = con.prepareStatement(sql)) {
+			pStmt.setString(1, nuevoEstado.toString());
+			pStmt.setInt(2, reserva.getId());
+			pStmt.setString(3, EstadoReserva.PENDIENTE.toString());
+			pStmt.setString(4, EstadoReserva.CONFIRMADA.toString());
+			if (pStmt.executeUpdate() != 1) {
+				throw new ReservaException("La reserva ya no está activa. Vuelve a cargar la lista.");
+			}
+			logger.info(String.format("La reserva %d ahora está %s", reserva.getId(), nuevoEstado));
+		} catch (SQLException ex) {
+			logger.warning(String.format("Error al cambiar el estado de la reserva: %s", ex.getMessage()));
+			throw new BDException("No se ha podido cambiar el estado de la reserva", ex);
+		}
+		//El objeto solo se cambia si se ha cambiado en la base de datos
+		reserva.setEstado(nuevoEstado);
+	}
 }

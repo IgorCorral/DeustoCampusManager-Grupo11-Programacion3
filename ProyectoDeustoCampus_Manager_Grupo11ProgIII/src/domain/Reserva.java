@@ -3,6 +3,7 @@ package domain;
 import java.time.LocalDate;
 
 public class Reserva {
+	private int id; // lo pone la base de datos al guardar la reserva
 	private Usuario usuario;
 	private Espacio espacio;
 	private LocalDate fecha;
@@ -15,6 +16,14 @@ public class Reserva {
 		this.fecha = fecha;
 		this.hora = hora;
 		this.estado = estado;
+	}
+
+	public int getId() {
+		return id;
+	}
+
+	public void setId(int id) {
+		this.id = id;
 	}
 
 	public Usuario getUsuario() {
