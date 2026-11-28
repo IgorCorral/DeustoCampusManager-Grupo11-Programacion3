@@ -36,8 +36,11 @@ public class VentanaLogin extends JFrame {
 		JButton btnEntrar = new JButton("Entrar");
 		btnEntrar.addActionListener(e -> iniciarSesion());
 		getRootPane().setDefaultButton(btnEntrar); 
+		JButton btnRegistro = new JButton("Crear cuenta");
+		btnRegistro.addActionListener(e -> new DialogoRegistro(this, gestor).setVisible(true));
 		JPanel panelBoton = new JPanel();
 		panelBoton.add(btnEntrar);
+		panelBoton.add(btnRegistro);
 
 		add(panelDatos, BorderLayout.CENTER);
 		add(panelBoton, BorderLayout.SOUTH);

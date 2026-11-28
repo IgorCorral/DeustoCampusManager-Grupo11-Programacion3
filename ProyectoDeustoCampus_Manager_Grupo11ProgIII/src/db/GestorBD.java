@@ -1,6 +1,9 @@
 package db;
 
+import java.io.BufferedReader;
 import java.io.FileReader;
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.PreparedStatement;
@@ -19,14 +22,13 @@ import domain.ReservaException;
 import domain.Rol;
 import domain.Usuario;
 
-// Capa de datos con SQLite, con la misma estructura que el GestorBD de las prácticas de JDBC.
-// Cada método abre su conexión con try-with-resources (se cierra sola aunque haya un error)
-// y usa PreparedStatement para pasar los datos a la sentencia SQL sin peligro de inyección SQL.
-// Si algo falla se guarda un aviso en el log y se lanza una BDException para que la ventana avise.
 public class GestorBD implements GestorDatos {
 
 	private final String PROPERTIES_FILE = "conf/app.properties";
 	private final String EMAIL_ADMIN = "admin@deusto.es";
+	private final String CSV_ESPACIOS = "resources/data/espacios.csv";
+	private final String CSV_USUARIOS = "resources/data/usuarios.csv";
+	private final String CSV_RESERVAS = "resources/data/reservas.csv";
 
 	private Properties properties;
 	private String connectionString;
@@ -95,6 +97,49 @@ public class GestorBD implements GestorDatos {
 		}
 	}
 
+	// Carga los datos de prueba de los ficheros CSV. Solo se hace si loadCSV es true en app.properties
+	// y la base de datos todavía no tiene espacios, es decir, la primera vez que se arranca
+	public void inicializarDesdeCSV() throws BDException {
+		if (!properties.getProperty("loadCSV").equals("true") || !getEspacios().isEmpty()) {
+			return;
+		}
+		//Cada línea se separa por ; y cada trozo es una columna
+		for (String linea : leerCSV(CSV_ESPACIOS)) {
+			String[] campos = linea.split(";");
+			crearEspacio(Espacio.crear(campos[0], campos[1], campos[2], Integer.parseInt(campos[3])));
+		}
+		for (String linea : leerCSV(CSV_USUARIOS)) {
+			String[] campos = linea.split(";");
+			insertarUsuario(campos[0], campos[1], campos[2], Rol.USUARIO);
+		}
+		//La fecha de las reservas está en días desde hoy, así siempre hay reservas pasadas y futuras
+		for (String linea : leerCSV(CSV_RESERVAS)) {
+			String[] campos = linea.split(";");
+			LocalDate fecha = LocalDate.now().plusDays(Integer.parseInt(campos[2]));
+			insertarReserva(new Reserva(getUsuario(campos[0]), getEspacio(campos[1]), fecha, campos[3],
+					EstadoReserva.valueOf(campos[4])));
+		}
+		logger.info("Se han cargado los datos de prueba de los ficheros CSV");
+	}
+
+	// Devuelve todas las líneas de un fichero CSV menos la cabecera
+	private List<String> leerCSV(String fichero) throws BDException {
+		List<String> lineas = new ArrayList<>();
+		//Se indica UTF-8 para que se lean bien las tildes
+		try (BufferedReader in = new BufferedReader(new FileReader(fichero, StandardCharsets.UTF_8))) {
+			String linea = null;
+			//Omitir la cabecera
+			in.readLine();
+			while ((linea = in.readLine()) != null) {
+				lineas.add(linea);
+			}
+		} catch (IOException ex) {
+			logger.warning(String.format("Error leyendo el fichero %s: %s", fichero, ex.getMessage()));
+			throw new BDException("No se ha podido leer el fichero " + fichero, ex);
+		}
+		return lineas;
+	}
+
 	// Devuelve el usuario con ese email o null si no existe
 	public Usuario getUsuario(String email) throws BDException {
 		Usuario usuario = null;
@@ -125,6 +170,16 @@ public class GestorBD implements GestorDatos {
 			return usuario;
 		}
 		return null;
+	}
+
+	// Da de alta un usuario normal. Devuelve false si ya hay un usuario con ese email
+	@Override
+	public boolean registrarUsuario(String email, String nombre, String contrasena) throws BDException {
+		if (getUsuario(email) != null) {
+			return false;
+		}
+		insertarUsuario(email, nombre, contrasena, Rol.USUARIO);
+		return true;
 	}
 
 	// Inserta un usuario nuevo en la tabla Usuario
@@ -185,6 +240,31 @@ public class GestorBD implements GestorDatos {
 			throw new BDException("No se ha podido consultar el espacio", ex);
 		}
 		return espacio;
+	}
+
+	// Guarda un espacio nuevo. Devuelve false si ya hay un espacio con ese código
+	@Override
+	public boolean crearEspacio(Espacio espacio) throws BDException {
+		if (getEspacio(espacio.getCodigo()) != null) {
+			return false;
+		}
+		String sql = "INSERT INTO Espacio (codigo, nombre, aforo, tipo) VALUES (?, ?, ?, ?)";
+		try (Connection con = DriverManager.getConnection(connectionString);
+				PreparedStatement pStmt = con.prepareStatement(sql)) {
+			pStmt.setString(1, espacio.getCodigo());
+			pStmt.setString(2, espacio.getNombre());
+			pStmt.setInt(3, espacio.getAforo());
+			pStmt.setString(4, espacio.getTipo());
+			if (pStmt.executeUpdate() != 1) {
+				logger.warning(String.format("No se ha insertado el espacio %s", espacio));
+			} else {
+				logger.info(String.format("Se ha insertado el espacio %s", espacio));
+			}
+		} catch (SQLException ex) {
+			logger.warning(String.format("Error al insertar el espacio %s: %s", espacio, ex.getMessage()));
+			throw new BDException("No se ha podido guardar el espacio", ex);
+		}
+		return true;
 	}
 
 	// Devuelve los espacios que no tienen ninguna reserva activa (pendiente o confirmada) en esa fecha y hora.
